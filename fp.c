@@ -9,8 +9,8 @@
 #define max_path 500
 
 
-char primary_path[max_path];
-
+//char Primary_path[max_path];
+char Cur_path[max_path];
 
 long long Number(char*);
 
@@ -56,10 +56,24 @@ long long Number(char *command){
     return number;
 }
 
+int take_cur_path(){
+    if(getcwd(Cur_path, sizeof(Cur_path)) == NULL)
+        return 0;
+    return 1;
+}
+
+int return_selected_path(){
+    if(chdir(Cur_path) != 0)
+        return 0;
+    return 1;
+}
+
 out_fr find_repository(char *path){
+	take_cur_path();
+	
 	// deafult output
 	out_fr output;
-     output.path = NULL, output.er = 0; // NULL, error nadarim
+     	output.path = NULL, output.er = 0; // NULL, error nadarim
 
 	// go to the given path
 	if(chdir(path) != 0){
@@ -110,7 +124,7 @@ out_fr find_repository(char *path){
           }
 	}
 
-	chdir(primary_path);
+	return selected_path();
 	return output;
 }
 
@@ -122,14 +136,30 @@ void do_init(int argc, char *argv[]) {
     }
 
     if(get_repository.path == NULL){
-	     if(mkdir(".fp", 0755) != 0)
-			return;
-	    	chdir(".fp");
-		if(mkdir("stage", 0755) != 0 || mkdir("commits", 0755) != 0)
-			return;
+	if(mkdir(".fp", 0755) != 0)
+        	return;
+	    
+	chdir(".fp");
+	if(mkdir("stage", 0755) != 0 || mkdir("commits", 0755) != 0)
+	        return;
+	    
+	// files relative to stage
+	chdir("stage");
+	FILE *make_file = fopen("inf.txt", "w");
+	fprintf(make_file, "%d", 0);
+	fclose(make_file);
+	            
+	make_file = fopen("stage.txt", "w");
+	fclose(make_file);
 
-		FILE *inf_file = fopen("inf.txt", "w");
-		fclose(inf_file);
+	// files relative to commit
+	chdir("../commits");
+	make_file = fopen("inf.txt", "w");
+	fprintf(make_file, "%d", 0);
+	fclose(make_file);
+	            
+	make_file = fopen("commits_infs.txt", "w");
+	fclose(make_file);
 
     }else
         printf("error: .fp repository has already initialized!\n");
@@ -149,9 +179,10 @@ void do_add(int argc, char *argv[]){
                return;
           }
 
+		take_cur_path();
 		chdir("/");
 		DIR *input_dir = opendir(argv[2]);
-		chdir(primary_path);
+		return_selected_path();
 		FILE *input_file = fopen(argv[2], "r");
 
 		//check directory
@@ -217,14 +248,16 @@ void do_add(int argc, char *argv[]){
 		// add with depth
 		if(!strcmp(argv[2], "-n") && argc == 4){
 			int nu = Number(argv[3]);
-			Dfs(primary_path, nu, 1, get_repository.path);
+			take_cur_path();
+			Dfs(Cur_path, nu, 1, get_repository.path);
 		}
 	}
 }
 
 void Dfs(char *path, int deep, int case_dfs, char *repository_path){
+	take_cur_path();
 	dfs(path, deep, case_dfs, repository_path);
-	chdir(primary_path);
+	return_selected_path();
 }
 
 // opendir
@@ -263,15 +296,51 @@ void dfs(char *path, int deep, int case_dfs, char *repository_path){
 }
 
 void do_add_stage(char *file_path, char *repository_path){
-	strcat(repository_path, "/.fp/stage.txt");
-	FILE *stage_file = fopen(repository_path, "a");
-	fputs(file_path, stage_file);
+	strcat(repository_path, "/.fp/stage);
+
+	taje_cur_path();
+	chdir(repository_path);
+	
+	FILE *stage_file = fopen("stage.txt, "r");
+	
+	FILE *inf_stage = fopen("inf.txt, "r");
+	int cnt;
+	fscanf(inf_stage, "%d", &cnt);
+	cnt++;
+	fclose(inf_stage);
+	fopen("inf.txt", "w");
+	fprintf(inf_stage, "%d", cnt);
+	fclose("inf.txt");
+	
+	FILE *tmp_stage = fopen("tmp_stage.txt", "w");
+	
+	while(fgets(in, max_path, stage_file) != NULL){
+		if(strcmp(in, file_path)){
+			fputs(in, tmp_stage);
+			fgets(in, max_path, stage_file);
+			fputs(in, tmp_stage);
+			fgets(in, max_path, stage_file);
+			fputs(in, tmp_stage);
+		}else{
+			fgets(in, max_path, stage_file);
+			fgets(in, max_path, stage_file);
+		}
+	}
+	
+	fputs(file_path, tmp_stage);
+	// fputs date last version
+	fprintf(tmp_file, "%d", cnt);
+
+	remove("stage.txt");
+	rename("tmp_stage.txt", "stage.txt");
+	
 	fclose(stage_file);
+
+	return_selected_path();
 }
 
 bool is_stage(char *file_path, char *repository_path){
     bool is_stage = false;
-
 
     strcat(repository_path, "/.fp/stage.txt");
     FILE *stage_file = fopen(repository_path, "r");
