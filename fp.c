@@ -6,8 +6,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#define max_path 500
 
+#define maxn 500
+#define max_path 500
+#define max_time 100
+#define max_massage 100
 
 //char Primary_path[max_path];
 char Cur_path[max_path];
@@ -40,9 +43,25 @@ int main(int argc, char *argv[]){
 	if(!strcmp("add", argv[1]))
 		do_add(argc, argv);
 	
-
-
-
+	if(!strcmp("log", argv[1])){
+	        if(argc == 2)
+	            do_log_n(1);
+	        else if(!strcmp("-n", argv[2]) && argc == 4)
+	            do_log_n(Number(argv[3]));
+	        else if(!strcmp("-branch", argv[2]) && argc == 4)
+	            do_log_branch(argv[3]);
+	        else if(!strcmp("-author", argv[2]) && argc == 4)
+	            do_log_author(argv[3]); // :)
+	        else if(!strcmp("-since", argv[2]) && argc == 5)
+	            do_log_since(argc, argv);
+	        else if(!strcmp("-before", argv[2]) && argc == 5)
+	            do_log_before(argc, argv);
+	        else if(!strcmp("-search", argv[2]) && argc == 4)
+	            do_log_search(argv[3]);
+	        else{
+	            printf("invalid command!\n");
+	        }
+    	}
 }
 
 long long Number(char *command){
@@ -360,6 +379,182 @@ bool is_stage(char *file_path, char *repository_path){
     return is_stage;
 }
 
+int do_log_is_repository(){
+    take_cur_path();
+    out_fr get_repository = find_repository(Cur_path);
+    if (get_repository.path == NULL || get_repository.er){
+        printf("error: you do not have a repository!\n");
+        return 0;
+    }
+
+    chdir(get_repository.path);
+    chdir(".fp/commits");
+    return 1;
+}
+
+void do_log_n(int number){
+    if(!do_log_is_repository())
+        return;
+
+    FILE *cnt_commits = fopen("cnt.txt", "r");
+    int cnt;
+    fscnf(cnt_commits, "%d", &cnt);
+
+    for(int i = cnt-number+1;i < cnt; i++)
+        do_log_show_commit(i);
+}
+
+void do_log_branch(char *branch_name){
+    if(!do_log_is_repository())
+        return;
+    FILE *branch_commit = fopen("branch.txt", "r");
+
+    int i = 1;
+    char in[maxn];
+    fgets(in, maxn, branch_commit);
+
+    while(!feof(branch_commit)){
+        if(!strcmp(in, branch_name))
+            do_log_show_commit(i);
+        fgets(in, maxn, branch_commit);
+        i++;
+    }
+}
+
+time_t to_time(char *string_time){
+    int yy, month, dd, hh, mm, ss;
+    sscanf(string_time, "%d/%d/%d %d:%d:%d", &yy, &month, &dd, &hh, &mm, &ss);
+
+    struct tm strc_time;
+    strc_time.tm_year = yy - 1900;
+    strc_time.tm_mon = month - 1;
+    strc_time.tm_mday = dd;
+    strc_time.tm_hour = hh;
+    strc_time.tm_min = mm;
+    strc_time.tm_sec = ss;
+    strc_time.tm_isdst = -1;
+
+    time_t your_time;
+    your_time = mktime(&strc_time);
+    return your_time;
+}
+
+void do_log_sinc(int argc, char *argv[]){
+    if(!do_log_is_repository())
+        return;
+    FILE *date_commit = fopen("date.txt", "r");
+
+    int i = 1;
+    char in[maxn];
+    fgets(in, maxn, date_commit);
+
+    strcat(argv[3], " ");
+    strcat(argv[3], argv[4]);
+    time_t given_time = to_time(argv[3]);
+
+    while(!feof(date_commit)){
+        time_t commit_time = rt_time(in);
+        if(diff_time(commit_time, given_time) >= 0){
+            break;
+        }
+        fgets(in, maxn, date_commit);
+        i++;
+    }
+
+    FILE *cnt_commits = fopen("cnt.txt", "r");
+    int cnt;
+    fscnf(cnt_commits, "%d", &cnt);
+
+    for(int j = cnt;i <= j;j--)
+        do_log_show_commit(j);
+}
+
+void do_log_before(int argc, char *argv[]){
+    if(!do_log_is_repository())
+        return;
+    FILE *date_commit = fopen("date.txt", "r");
+
+    int i = 1;
+    char in[maxn];
+    fgets(in, maxn, date_commit);
+
+    strcat(argv[3], " ");
+    strcat(argv[3], argv[4]);
+    time_t given_time = to_time(argv[3]);
+
+    while(!feof(date_commit)){
+        time_t commit_time = rt_time(in);
+        if(diff_time(commit_time, given_time) >= 0){
+            break;
+        }
+            do_log_show_commit(i);
+        fgets(in, maxn, date_commit);
+        i++;
+    }
+
+    FILE *cnt_commits = fopen("cnt.txt", "r");
+    int cnt;
+    fscnf(cnt_commits, "%d", &cnt);
+
+    for(int j = i-1;1 <= j;j--)
+        do_log_show_commit(j);
+}
+
+void do_log_search(char *search){
+    if(!do_log_is_repository())
+        return;
+    FILE *massage_commit = fopen("massage.txt", "r");
+
+    int i = 1;
+    char in[maxn];
+    fgets(in, maxn, massage_commit);
+
+    while(!feof(massage_commit)){
+        if(strstr(in, search) != NULL)
+            do_log_show_commit(i);
+        fgets(in, maxn, massage_commit);
+        i++;
+    }
+}
+
+void do_log_show_commit(int x){
+    // open files
+    FILE *date_commit = fopen("date.txt", "r");
+    FILE *massage_commit = fopen("massage.txt", "r");
+        // author
+    FILE *branch_commit = fopen("branch.txt", "r");
+    FILE *cnt_file_commit = fopen("cnt_file.txt", "r");
+
+    // go to the selected commit
+    int i = 1;
+    char in[maxn];
+    while(i != x){
+        fgets(in ,maxn, date_commit);
+        fgets(in, maxn, massage_commit);
+        fgets(in, maxn, branch_commit);
+        fgets(in, maxn, cnt_file_commit);
+        i++;
+    }
+
+    // printf selected commit
+    fprintf("id: %d\n", i);
+    fgets(in, maxn, massage_commit);
+    fprintf("massage: %s\n", in);
+    fgets(in, maxn, date_commit);
+    fprintf("date: %s\n", in);
+        // author
+        // gmail
+    fgets(in, maxn, branch_commit);
+    fprintf("branch: %s\n", in);
+    fgets(in, maxn, cnt_file_commit);
+    fprintf("the number of commited files: %s\n", in);
+
+    // close files
+    fclose(massage_commit);
+    fclose(date_commit);
+    fclose(branch_commit);
+    fclose(cnt_file_commit);
+}
 
 
 /*int main(int argc, char *argv[]){
