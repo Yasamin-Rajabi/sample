@@ -14,11 +14,14 @@
 #define max_massage 100
 
 char Cur_path[max_path];
+char Tmp_path[max_path];
 
+int take_cur_path();
+int selected_paht();
 long long Number(char*);
 
 typedef struct out_fr{
-     char *path;
+     char path[max_path];
      int er;
 } out_fr;
 
@@ -28,11 +31,13 @@ out_fr find_repository(char*);
 void do_add(int, char*[]);
 void do_add_stage(char*, char*);
 void Dfs(char*, int, int, char*);
-void dfs(char*, int, int, char*);
+void dfs(int, int, char*);
 bool is_stage(char*, char*);
 
 void do_reset(int, char*[]);
 void do_remove_stage_file(char*);
+void Dfs_r(char*);
+void dfs_r(char*);
 
 time_t to_time(char*);
 int do_log_is_repository();
@@ -105,10 +110,11 @@ out_fr find_repository(char *path){
 	
 	// deafult output
 	out_fr output;
-     output.path = NULL, output.er = 0; // NULL, error nadarim
+     strcpy(output.path, ""), output.er = 0; // NULL, error nadarim
 
 	// go to the given path
 	if(chdir(path) != 0){
+		printf(":()");
 		output.er = 1;
 		return output;
 	}
@@ -141,7 +147,7 @@ out_fr find_repository(char *path){
 
 		// check exist
 		if(exist){
-			output.path = cur_path;
+			strcpy(output.path , cur_path);
 			break;
 		}
 		
@@ -168,7 +174,7 @@ void do_init(int argc, char *argv[]) {
 		return;
     	}
 
-    	if(get_repository.path == NULL){
+    	if(!strcmp(get_repository.path,"")){
 		if(mkdir(".fp", 0755) != 0)
         		return;
 	    
@@ -209,6 +215,7 @@ void do_init(int argc, char *argv[]) {
 		make_file = fopen("total_commited_files.txt", "w");
      	fclose(make_file);
 
+		printf("the repository was created successfully!\n");
     }else
         printf("error: .fp repository has already initialized!\n");
 }
@@ -219,12 +226,14 @@ void do_add(int argc, char *argv[]){
 
 	// add with path
 	if(((*argv[2]) != '-') && (strstr(argv[2], "*") == NULL) && (argc == 3)){
+//		printf("HHHH");
 		//check repository
 		out_fr get_repository = find_repository(argv[2]);
-          if (get_repository.path == NULL || get_repository.er){
+          if (!strcmp(get_repository.path , "") || get_repository.er){
           	printf("error: you do not have a repository!\n");
                return;
           }
+//		printf("JJJJ");
 
 		take_cur_path();
 		chdir("/");
@@ -250,7 +259,7 @@ void do_add(int argc, char *argv[]){
 		//check repository
 		take_cur_path();
           out_fr get_repository = find_repository(Cur_path);
-          if (get_repository.path == NULL || get_repository.er){
+          if (!strcmp(get_repository.path , "") || get_repository.er){
                printf("error: you do not have a repository!\n");
                return;
           }
@@ -259,7 +268,7 @@ void do_add(int argc, char *argv[]){
 		if(((*argv[2]) != '-') && argc == 3){
 		
 		}
-
+		
 		// add with -f
 		if(!strcmp(argv[2], "-f") && argc > 3){
 			FILE *tmp_file;
@@ -277,14 +286,14 @@ void do_add(int argc, char *argv[]){
 				// check directory
 				if((tmp_dir = opendir(argv[i])) != NULL){
 					closedir(tmp_dir);
-					dfs(entry_path, 0, 0, get_repository.path);
+					Dfs(entry_path, 0, 0, get_repository.path);
 					printf("directory:%s added successfully\n", argv[i]);
 
 				// check file
 				}else if((tmp_file = fopen(argv[i], "r")) != NULL){
 					fclose(tmp_file);
 					do_add_stage(entry_path, get_repository.path);
-					printf("file:%s added successfully\n", argv[i]);
+					//printf("file:%s added successfully\n", argv[i]);
 
 				// not exist
 				}else{
@@ -303,55 +312,64 @@ void do_add(int argc, char *argv[]){
 	}
 }
 
-void Dfs(char *path, int deep, int case_dfs, char *repository_path){
-	take_cur_path();
-	dfs(path, deep, case_dfs, repository_path);
-	return_selected_path();
+void Dfs(char path[], int deep, int case_dfs, char repository_path[]){
+	char our_path[max_path];
+	getcwd(our_path, sizeof(our_path));
+
+	chdir(path);
+	dfs(deep, case_dfs, repository_path);
+	
+	chdir(our_path);
 }
 
 // opendir
-void dfs(char *path, int deep, int case_dfs, char *repository_path){
-	if(!deep && case_dfs == 1)
+void dfs(int deep, int case_dfs, char repository_path[]){
+	if(!deep && case_dfs == 1){
+		chdir("..");
 		return;
+	}
 
-	chdir(path);
 	DIR *dir = opendir(".");
 
 	struct dirent* entry;
 	while((entry = readdir(dir)) != NULL){
 		if(strcmp(entry -> d_name, ".") && strcmp(entry -> d_name, "..") && strcmp(entry -> d_name, ".fp") && entry -> d_type == DT_REG){
-			char *file_path = (char*) malloc(max_path * sizeof(char));
-			strcpy(file_path, path);
-			strcat(file_path, entry -> d_name);
+			//char _path[max_path];// = (char*) malloc(max_path * sizeof(char));
+			getcwd(Tmp_path, sizeof(Tmp_path));
+			strcat(Tmp_path, "/");
+			strcat(Tmp_path, entry -> d_name);
 
 			if(case_dfs == 0){
-				do_add_stage(file_path, repository_path);
+				do_add_stage(Tmp_path, repository_path);
 			}
 			if(case_dfs == 1){
-				printf("file name: %s\n file path: %s\n stage: %d\n", entry -> d_name, file_path, is_stage(file_path, repository_path));
+				printf("file name: %s\nfile path: %s\nstage: %d\n", entry -> d_name, Tmp_path, is_stage(Tmp_path, repository_path));
 			}
 
-			free(file_path);
+		//	free(file_path);
 		}
 		if(strcmp(entry -> d_name, ".") && strcmp(entry -> d_name, "..") && strcmp(entry -> d_name, ".fp") && entry -> d_type == DT_DIR){
-			char *dir_path = (char*) malloc(max_path * sizeof(char));
-               strcpy(dir_path, path);
-               strcat(dir_path, entry -> d_name);
-               dfs(dir_path, deep-1, case_dfs, repository_path);
-               free(dir_path);
+			chdir(entry -> d_name);
+               dfs(deep-1, case_dfs, repository_path);
 		}
 	}
+
 	closedir(dir);
+	chdir("..");
 }
 
 void do_add_stage(char *file_path, char *repository_path){
-	strcat(repository_path, "/.fp/stage");
-
 	take_cur_path();
-	chdir(repository_path);
-	
+
+	// make stage path and go in it
+	char *stage_path = malloc(max_path * sizeof(char));
+	strcpy(stage_path, repository_path);
+	strcat(stage_path, "/.fp/stage");
+//	printf("stg_path: %s\n", stage_path); ///
+	chdir(stage_path);
 	FILE *stage_file = fopen("stage.txt", "r");
 	
+	// open inf.txt and update cnt
 	FILE *inf_stage = fopen("inf.txt", "r");
 	int cnt;
 	fscanf(inf_stage, "%d", &cnt);
@@ -360,38 +378,48 @@ void do_add_stage(char *file_path, char *repository_path){
 	fopen("inf.txt", "w");
 	fprintf(inf_stage, "%d", cnt);
 	fclose(inf_stage);
-	
+	printf("cnt=%d\n", cnt); /// 
+
 	FILE *tmp_stage = fopen("tmp_stage.txt", "w");
 	
 	char in[max_path];
+
+	char fp_compare[max_path];
+	strcpy(fp_compare, file_path);
+	strcat(fp_compare, "\n");
+
 	while(fgets(in, max_path, stage_file) != NULL){
-		if(strcmp(in, file_path)){
-			fputs(in, tmp_stage);
+		if(strcmp(in, fp_compare)){
+			//printf("%s*%s",in, file_path);
+			fprintf(tmp_stage, "%s", in);
 			fgets(in, max_path, stage_file);
-			fputs(in, tmp_stage);
+			fprintf(tmp_stage, "%s", in);
 			fgets(in, max_path, stage_file);
-			fputs(in, tmp_stage);
+			fprintf(tmp_stage, "%s", in);
 		}else{
 			fgets(in, max_path, stage_file);
 			fgets(in, max_path, stage_file);
 		}
 	}
 	
-	fputs(file_path, tmp_stage);
-	// fputs date last version
+	fprintf(tmp_stage, "%s\n", file_path);
+	fprintf(tmp_stage, "date\n");
 	fprintf(tmp_stage, "%d\n", cnt);
 
 	// copy file in here
+	fclose(tmp_stage);
 	remove("stage.txt");
 	rename("tmp_stage.txt", "stage.txt");
 	
-	fclose(stage_file);
+	free(stage_path);
 
 	return_selected_path();
+
+	printf("file with path:%s added successfully!\n", file_path);
 }
 
 
-bool is_stage(char *path, char *repository_path){
+bool is_stage(char path[], char repository_path[]){
     take_cur_path();
 
     bool is_stage = false;
@@ -401,10 +429,14 @@ bool is_stage(char *path, char *repository_path){
     FILE *stage_file = fopen("stage.txt", "r");
 
     char *in = (char*) malloc(max_path * sizeof(char));
-
     in = fgets(in, max_path, stage_file);
+
+    char fp_compare[max_path];
+    strcpy(fp_compare, path);
+    strcat(fp_compare, "\n");
+
     while(!feof(stage_file)){
-        if(!strcmp(path, in)){
+        if(!strcmp(fp_compare, in)){
             is_stage = true;
             break;
         }
@@ -413,7 +445,8 @@ bool is_stage(char *path, char *repository_path){
         in = fgets(in, max_path, stage_file);
     }
     fclose(stage_file);
-    
+    free(in);
+
     return_selected_path();
 
     return is_stage;
@@ -426,7 +459,7 @@ void do_reset(int argc, char *argv[]){
     }
 
     out_fr get_repository = find_repository(argv[2]);
-    if (get_repository.path == NULL || get_repository.er){
+    if (!strcmp(get_repository.path , "") || get_repository.er){
         printf("error: you do not have a repository!\n");
         return;
     }
@@ -471,9 +504,41 @@ void do_reset(int argc, char *argv[]){
     }
 }
 
+void Dfs_r(char *dir_path){
+	char our_path[max_path];
+     getcwd(our_path, sizeof(our_path));
+
+     chdir(dir_path);
+     dfs_r();
+
+     chdir(our_path);
+}
+
+void dfs_r(){
+     DIR *dir = opendir(".");
+
+     struct dirent* entry;
+     while((entry = readdir(dir)) != NULL){
+          if(strcmp(entry -> d_name, ".") && strcmp(entry -> d_name, "..") && strcmp(entry -> d_name, ".fp") && entry -> d_type == DT_REG){
+               getcwd(Tmp_path, sizeof(Tmp_path));
+               strcat(Tmp_path, "/");
+               strcat(Tmp_path, entry -> d_name);
+
+               do_remove_stage_file(Tmp_path);
+          }
+          if(strcmp(entry -> d_name, ".") && strcmp(entry -> d_name, "..") && strcmp(entry -> d_name, ".fp") && entry -> d_type == DT_DIR){
+               chdir(entry -> d_name);
+               dfs_r();
+          }
+     }
+
+     closedir(dir);
+	chdir("..");
+}
+
 void do_remove_stage_file(char *file_path) {
     out_fr get_repository = find_repository(file_path);
-    if (get_repository.path == NULL || get_repository.er){
+    if (!strcmp(get_repository.path , "") || get_repository.er){
         printf("error: you do not have a repository!\n");
         return;
     }
@@ -488,23 +553,13 @@ void do_remove_stage_file(char *file_path) {
     char in[max_path];
     while (fgets(in, max_path, stage_file) != NULL) {
         if (strcmp(file_path, in)){
-
-            int length = strlen(in);
-            if (length > 0 && in[length - 1] == '\n')
-                in[length - 1] = '\0';
-            fputs(in, tmp_file);
+            fprintf(tmp_file, "%s", in);
 
             fgets(in, max_path, stage_file);
-            length = strlen(in);
-            if (length > 0 && in[length - 1] == '\n')
-                in[length - 1] = '\0';
-            fputs(in, tmp_file);
+            fprintf(tmp_file, "%s", in);
 
             fgets(in, max_path, stage_file);
-            length = strlen(in);
-            if (length > 0 && in[length - 1] == '\n')
-                in[length - 1] = '\0';
-            fputs(in, tmp_file);
+            fprintf(tmp_file, "%s", in);
         }else{
             fgets(in, max_path, stage_file);
             fgets(in, max_path, stage_file);
@@ -637,7 +692,7 @@ void do_commit(int argc, char argv[]){
 int do_log_is_repository(){
     take_cur_path();
     out_fr get_repository = find_repository(Cur_path);
-    if (get_repository.path == NULL || get_repository.er){
+    if (!strcmp(get_repository.path , "") || get_repository.er){
         printf("error: you do not have a repository!\n");
         return 0;
     }
@@ -674,6 +729,10 @@ void do_log_branch(char *branch_name){
         fgets(in, maxn, branch_commit);
         i++;
     }
+}
+
+void do_log_author(char *author_name){
+
 }
 
 time_t to_time(char *string_time){
