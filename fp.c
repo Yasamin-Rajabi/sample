@@ -35,12 +35,12 @@ void dfs(int, int, char*);
 bool is_stage(char*, char*);
 
 void do_reset(int, char*[]);
-void do_remove_stage_file(char*);
-void Dfs_r(char*);
-void dfs_r();
+void do_remove_stage_file(char*, char*);
+void Dfs_r(char*, char*);
+void dfs_r(char*);
 
 void do_status();
-void dfs_s(char*, char*);
+void dfs_s(char*, char*, int);
 int do_check_with_last_commit(char*, time_t, char*);
 
 void do_check_massage(int, char*[]);
@@ -78,9 +78,17 @@ int main(int argc, char *argv[]){
 		do_commit(argc, argv);
 
 	if(!strcmp("log", argv[1])){
-		if(argc == 2)
-	     	do_log_n(1);
-		else if(!strcmp("-n", argv[2]) && argc == 4)
+		if(argc == 2){
+			if(do_log_is_repository()){
+				FILE *cnt_commits = fopen("cnt.txt", "r");
+    				int cnt;
+    				fscanf(cnt_commits, "%d", &cnt);
+
+    				for(int j = cnt;1 <= j;j--)
+        				do_log_show_commit(j);
+			}
+
+		}else if(!strcmp("-n", argv[2]) && argc == 4)
 	          do_log_n(Number(argv[3]));
 	     else if(!strcmp("-branch", argv[2]) && argc == 4)
 			do_log_branch(argv[3]);
@@ -219,6 +227,10 @@ void do_init(int argc, char *argv[]) {
     	if(!strcmp(get_repository.path,"")){
 		if(mkdir(".fp", 0755) != 0)
         		return;
+
+		chdir(".fp");
+          if(mkdir("stage", 0755) != 0 || mkdir("commits", 0755) != 0 || mkdir("branch", 0755) != 0)
+               return;
 	    
 		// inf files
 		FILE * make_file = fopen("last_commit_id.txt", "w");
@@ -233,11 +245,6 @@ void do_init(int argc, char *argv[]) {
 		make_file = fopen("last_commit_HEAD.txt", "w");
           fprintf(make_file, "%d\n", 0);
           fclose(make_file);
-
-
-		chdir(".fp");
-		if(mkdir("stage", 0755) != 0 || mkdir("commits", 0755) != 0 || mkdir("branch", 0755) != 0)
-			return;
 	    
 		// files relative to stage
 		chdir("stage");
@@ -248,11 +255,10 @@ void do_init(int argc, char *argv[]) {
 		make_file = fopen("stage.txt", "w");
 		fclose(make_file);
 
-		make_file = fopen("stage_delete.txt", "w");
-          fclose(make_file);
-
 		// files relative to commit
-		chdir("../commits");
+		chdir(".."); 
+		chdir("commits");
+
 		make_file = fopen("cnt.txt", "w");
 		fprintf(make_file, "%d", 0);
 		fclose(make_file);
@@ -276,7 +282,8 @@ void do_init(int argc, char *argv[]) {
      	fclose(make_file);
 
 		// files relative to branch
-		chdir("../branch");
+		chdir(".."), chdir("branch");
+
 		make_file = fopen("cnt.txt", "w");
 		fprintf(make_file, "%d\n", 1);
           fclose(make_file);
@@ -455,7 +462,7 @@ void do_add_stage(char *file_path, char *repository_path){
 	fopen("inf.txt", "w");
 	fprintf(inf_stage, "%d", cnt);
 	fclose(inf_stage);
-	printf("cnt=%d\n", cnt); /// 
+//	printf("cnt=%d\n", cnt); /// 
 
 	FILE *tmp_stage = fopen("tmp_stage.txt", "w");
 	
@@ -487,6 +494,7 @@ void do_add_stage(char *file_path, char *repository_path){
 	strftime(char_last_change, max_time, "%Y/%m/%d %H:%M:%S", localtime(&last_change));
 	fprintf(tmp_stage, "%s\n", char_last_change);
 
+	int cnt_int = (int) cnt;
 	fprintf(tmp_stage, "%d\n", cnt);
 
 	// copy file in here
@@ -508,7 +516,7 @@ bool is_stage(char path[], char repository_path[]){
     bool is_stage = false;
 
     chdir(repository_path);
-    chdir(".fp/stage");
+    chdir(".fp"), chdir("stage");
     FILE *stage_file = fopen("stage.txt", "r");
 
     char *in = (char*) malloc(max_path * sizeof(char));
@@ -567,12 +575,12 @@ void do_reset(int argc, char *argv[]){
           if(input_dir != NULL){
 			chdir(argv[2]);
                closedir(input_dir);
-			Dfs_r(argv[2]);
+			Dfs_r(argv[2], get_repository.path);
 
           // check file
           }else if(input_file != NULL){
                fclose(input_file);
-			do_remove_stage_file(argv[2]);
+			do_remove_stage_file(argv[2], get_repository.path);
 
           // not exist
           }else
@@ -587,9 +595,40 @@ void do_reset(int argc, char *argv[]){
 			return;
 		}
 
-
 		if(((*argv[2]) != '-') && (argc == 3)){
-			// wildcard
+               // wildcard
+
+		// remove with -f
+		}else if(!strcmp(argv[2], "-f") && argc > 3){
+               FILE *tmp_file;
+               DIR *tmp_dir;
+               char *entry_path = (char*) malloc(max_path * sizeof(char));
+
+               take_cur_path();
+               for(int i = 3;i < argc;i++){
+
+                    // make path
+                    strcpy(entry_path, Cur_path);
+                    strcat(entry_path, "/");
+                    strcat(entry_path, argv[i]);
+
+                    // check directory
+                    if((tmp_dir = opendir(argv[i])) != NULL){
+                         closedir(tmp_dir);
+                         Dfs_r(entry_path, get_repository.path);
+                         printf("directory:%s removed successfully\n", argv[i]);
+
+                    // check file
+                    }else if((tmp_file = fopen(argv[i], "r")) != NULL){
+                         fclose(tmp_file);
+                         do_remove_stage_file(entry_path, get_repository.path);
+                         //printf("file:%s added successfully\n", argv[i]);
+
+                    // not exist
+                    }else{
+                         printf("error: there is no file or directory with name:%s!\n", argv[i]);
+                    }
+               }
 
     		}else if(!strcmp(argv[2], "-undo") && argc == 3){
         		take_cur_path();
@@ -607,17 +646,17 @@ void do_reset(int argc, char *argv[]){
 	}
 }
 
-void Dfs_r(char *dir_path){
+void Dfs_r(char *dir_path, char repository_path[]){
 	char our_path[max_path];
      getcwd(our_path, sizeof(our_path));
 
      chdir(dir_path);
-     dfs_r();
+     dfs_r(repository_path);
 
      chdir(our_path);
 }
 
-void dfs_r(){
+void dfs_r(char repository_path[]){
      DIR *dir = opendir(".");
 
      struct dirent* entry;
@@ -627,11 +666,11 @@ void dfs_r(){
                strcat(Tmp_path, "/");
                strcat(Tmp_path, entry -> d_name);
 
-               do_remove_stage_file(Tmp_path);
+               do_remove_stage_file(Tmp_path, repository_path);
           }
           if(strcmp(entry -> d_name, ".") && strcmp(entry -> d_name, "..") && strcmp(entry -> d_name, ".fp") && entry -> d_type == DT_DIR){
                chdir(entry -> d_name);
-               dfs_r();
+               dfs_r(repository_path);
           }
      }
 
@@ -639,23 +678,22 @@ void dfs_r(){
 	chdir("..");
 }
 
-void do_remove_stage_file(char *file_path) {
-    out_fr get_repository = find_repository(file_path);
-    if (!strcmp(get_repository.path , "") || get_repository.er){
-        printf("error: you do not have a repository!\n");
-        return;
-    }
-
+void do_remove_stage_file(char file_path[], char repository_path[]) {
     take_cur_path();
-    chdir(get_repository.path);
-    chdir(".fp/stage");
+    chdir(repository_path);
+    chdir(".fp");
+    chdir("stage");
 
     FILE *stage_file = fopen("stage.txt", "r");
     FILE *tmp_file = fopen("tmp_stage.txt", "w");
 
+    char fp_compare[max_path];
+    strcpy(fp_compare, file_path);
+    strcat(fp_compare, "\n");
+
     char in[max_path];
     while (fgets(in, max_path, stage_file) != NULL) {
-        if (strcmp(file_path, in)){
+        if (strcmp(fp_compare, in)){
             fprintf(tmp_file, "%s", in);
 
             fgets(in, max_path, stage_file);
@@ -677,6 +715,7 @@ void do_remove_stage_file(char *file_path) {
     fclose(tmp_file);
 
     return_selected_path();
+    printf("file with path:%s removed successfully!\n", file_path);
     return;
 }
 
@@ -734,21 +773,18 @@ void do_commit(int argc, char *argv[]){
     char in[maxn];
     // check stage != NULL
     chdir(get_repository.path);
-    chdir(".fp/stage");
+    chdir(".fp"), chdir("stage");
     FILE *tmp_file = fopen("stage.txt", "r");
-    FILE *tmp2_file = fopen("stage_delete.txt", "r");
 
     if(fgets(in, maxn, tmp_file) == NULL){
-        if(fgets(in, maxn, tmp2_file) == NULL){
-            printf("stage is empty!\n");
-            return;
-        }
-    }
-    fclose(tmp_file);
-    fclose(tmp2_file);
+		printf("stage is empty!\n");
+		return;
+    	}
+     fclose(tmp_file);
 
     // make massage
     char *massage = (char*) malloc(max_massage * sizeof(char));
+    strcpy(massage, "");
     if(argc == 4)
         strcat(massage, "\"");
     for(int i = 3;i < argc;i++){
@@ -758,6 +794,7 @@ void do_commit(int argc, char *argv[]){
     }
     if(argc == 4)
         strcat(massage, "\"");
+    //printf("%s\n", massage);
 
     // get last branch id
     chdir(get_repository.path);
@@ -779,15 +816,15 @@ void do_commit(int argc, char *argv[]){
     fclose(tmp_file);
     tmp_file = fopen("cnt.txt", "w");
     cnt_commits++;
-    fprintf(tmp_file, "%d", cnt_commits);
+    fprintf(tmp_file, "%d\n", cnt_commits);
     fclose(tmp_file);
 
     // open stage
-    chdir("../stage");
+    chdir(".."), chdir("stage");
     FILE *stage_file = fopen("stage.txt", "r");
 
     // make dir commit
-    chdir("../commits");
+    chdir(".."), chdir("commits");
     char dir_commit_name[maxn];
     sprintf(dir_commit_name, "%d", cnt_commits);
     if(mkdir(dir_commit_name, 0755) != 0){
@@ -795,56 +832,76 @@ void do_commit(int argc, char *argv[]){
         return;
     }
     chdir(dir_commit_name);
+
     FILE *inf_commit_file = fopen("inf.txt", "w");
+
+    take_cur_path();
 
     // commit
     char id[maxn];
-    int cnt_commit_files = 0;
+    int cnt_commited_files = 0;
     while(fgets(in, maxn, stage_file) != NULL){
-        fputs(in, inf_commit_file);
+        fprintf(inf_commit_file, "%s", in);
 
         fgets(in, maxn, stage_file);
-        fputs(in, inf_commit_file);
+        fprintf(inf_commit_file, "%s", in);
 
         fgets(in, maxn, stage_file);
-        fputs(in,inf_commit_file);
+        fprintf(inf_commit_file, "%s", in);
 
-        int id_file;
-        sscanf(in, "%d\n", &id_file);
-        sprintf(id, "%d.txt", id_file);
+        //int id_file;
+        //sscanf(in, "%d\n", &id_file);
+        //sprintf(id, "%d.txt", id_file);
 
         // fili ba esm id az stage ro bayad bardarim copy conim to get_repository.path/.fp/commits/cnt(dir)/ba hamon esm
 
-        cnt_commit_files ++;
+        cnt_commited_files ++;
     }
 
 
-    // update commits
-    chdir(get_repository.path);
-    chdir(".fp/commits");
+     ///// update commits /////
+	chdir(get_repository.path);
+     chdir(".fp"), chdir("commits");
 
-    // massage
-    FILE *update_commit = fopen("massage.txt", "a");
-    fprintf(update_commit, "%s\n", massage);
-    fclose(update_commit);
+     // massage
+     FILE *update_commit = fopen("massage.txt", "a");
+     fprintf(update_commit, "%s\n", massage);
+     fclose(update_commit);
 
-    // date
-    update_commit = fopen("date.txt", "a");
-    char cur_time[max_time];
-    time_t now; time(&now);
-    strftime(cur_time, max_time, "%Y/%m/%d %H:%M:%S", localtime(&now));
-    fprintf(update_commit, "%s\n", cur_time);
-    fclose(update_commit);
+     // date
+     update_commit = fopen("date.txt", "a");
+     char cur_time[max_time];
+     time_t now; time(&now);
+     strftime(cur_time, max_time, "%Y/%m/%d %H:%M:%S", localtime(&now));
+     fprintf(update_commit, "%s\n", cur_time);
+     fclose(update_commit);
 
-    // branch
-    update_commit = fopen("branch.txt", "a");
-    fprintf(update_commit, "%s\n", last_branch_name);
-    fclose(update_commit);
+     // branch
+     update_commit = fopen("branch.txt", "a");
+     fprintf(update_commit, "%s", last_branch_name);
+     fclose(update_commit);
 
-    // total commit files
-    update_commit = fopen("total_commit_files.txt", "a");
-    fprintf(update_commit, "%d\n", cnt_commit_files);
-    fclose(update_commit);
+     // total commit files
+     update_commit = fopen("total_commited_files.txt", "a");
+     fprintf(update_commit, "%d\n", cnt_commited_files);
+     fclose(update_commit);
+
+     ///// clear stage ////
+	chdir(".."), chdir("stage");
+	update_commit = fopen("stage.txt", "w");
+     fclose(update_commit);
+
+	// change inf files
+	chdir("..");
+	update_commit = fopen("last_commit_id.txt", "w");
+     fprintf(update_commit, "%d\n", cnt_commits);
+     fclose(update_commit);
+
+	if(!strcmp(last_branch_name, "master\n")){
+		update_commit = fopen("last_commit_HEAD.txt", "w");
+	     fprintf(update_commit, "%d\n", cnt_commits);
+     	fclose(update_commit);
+	}
 }
 
 int do_log_is_repository(){
@@ -856,7 +913,7 @@ int do_log_is_repository(){
     }
 
     chdir(get_repository.path);
-    chdir(".fp/commits");
+    chdir(".fp"), chdir("commits");
     return 1;
 }
 
@@ -868,25 +925,26 @@ void do_log_n(int number){
     int cnt;
     fscanf(cnt_commits, "%d", &cnt);
 
-    for(int i = cnt-number+1;i < cnt; i++)
+    for(int i = cnt-number+1;i <= cnt; i++)
         do_log_show_commit(i);
 }
 
 void do_log_branch(char *branch_name){
-    if(!do_log_is_repository())
-        return;
-    FILE *branch_commit = fopen("branch.txt", "r");
+     if(!do_log_is_repository())
+         return;
+     FILE *branch_commit = fopen("branch.txt", "r");
 
-    int i = 1;
-    char in[maxn];
-    fgets(in, maxn, branch_commit);
+     int i = 1;
+     char in[maxn];
+     fgets(in, maxn, branch_commit);
+	strcat(branch_name, "\n");
 
-    while(!feof(branch_commit)){
-        if(!strcmp(in, branch_name))
-            do_log_show_commit(i);
-        fgets(in, maxn, branch_commit);
-        i++;
-    }
+     while(!feof(branch_commit)){
+         if(!strcmp(in, branch_name))
+             do_log_show_commit(i);
+         fgets(in, maxn, branch_commit);
+         i++;
+     }
 }
 
 void do_log_author(char *author_name){
@@ -895,7 +953,7 @@ void do_log_author(char *author_name){
 
 time_t to_time(char *string_time){
     int yy, month, dd, hh, mm, ss;
-    sscanf(string_time, "%d/%d/%d %d:%d:%d", &yy, &month, &dd, &hh, &mm, &ss);
+    sscanf(string_time, "%d/%d/%d %d:%d:%d\n", &yy, &month, &dd, &hh, &mm, &ss);
 
     struct tm strc_time;
     strc_time.tm_year = yy - 1900;
@@ -918,18 +976,21 @@ void do_log_since(int argc, char *argv[]){
 
     int i = 1;
     char in[maxn];
-    fgets(in, maxn, date_commit);
+ 
+    char given_date[max_time];
+    strcpy(given_date, argv[3]);
+    strcat(given_date, " ");
+    strcat(given_date, argv[4]);
+    strcat(given_date, "\n");
 
-    strcat(argv[3], " ");
-    strcat(argv[3], argv[4]);
-    time_t given_time = to_time(argv[3]);
+    time_t given_time = to_time(given_date);
 
-    while(!feof(date_commit)){
+    while(fgets(in, maxn, date_commit) != NULL){
         time_t commit_time = to_time(in);
+	   //printf("commit time %sgiven time %s", in, given_date);
         if(difftime(commit_time, given_time) >= 0){
             break;
         }
-        fgets(in, maxn, date_commit);
         i++;
     }
 
@@ -948,19 +1009,20 @@ void do_log_before(int argc, char *argv[]){
 
     int i = 1;
     char in[maxn];
-    fgets(in, maxn, date_commit);
 
-    strcat(argv[3], " ");
-    strcat(argv[3], argv[4]);
-    time_t given_time = to_time(argv[3]);
+    char given_date[max_time];
+    strcpy(given_date, argv[3]);
+    strcat(given_date, " ");
+    strcat(given_date, argv[4]);
+    strcat(given_date, "\n");
 
-    while(!feof(date_commit)){
+    time_t given_time = to_time(given_date);
+
+    while(fgets(in, maxn, date_commit) != NULL){
         time_t commit_time = to_time(in);
         if(difftime(commit_time, given_time) >= 0){
             break;
         }
-            do_log_show_commit(i);
-        fgets(in, maxn, date_commit);
         i++;
     }
 
@@ -995,7 +1057,7 @@ void do_log_show_commit(int x){
     FILE *massage_commit = fopen("massage.txt", "r");
         // author
     FILE *branch_commit = fopen("branch.txt", "r");
-    FILE *cnt_file_commit = fopen("cnt_file.txt", "r");
+    FILE *cnt_file_commit = fopen("total_commited_files.txt", "r");
 
     // go to the selected commit
     int i = 1;
@@ -1011,15 +1073,16 @@ void do_log_show_commit(int x){
     // printf selected commit
     printf("id: %d\n", i);
     fgets(in, maxn, massage_commit);
-    printf("massage: %s\n", in);
+    printf("massage: %s", in);
     fgets(in, maxn, date_commit);
-    printf("date: %s\n", in);
+    printf("date: %s", in);
         // author
         // gmail
     fgets(in, maxn, branch_commit);
-    printf("branch: %s\n", in);
+    printf("branch: %s", in);
     fgets(in, maxn, cnt_file_commit);
-    printf("the number of commited files: %s\n", in);
+    printf("the number of commited files: %s", in);
+    printf("\n");
 
     // close files
     fclose(massage_commit);
@@ -1046,6 +1109,13 @@ void do_status(){
     fscanf(last_commit_id, "%d", &nu_last_commit);
     fclose(last_commit_id);
 
+    if(nu_last_commit == 0){
+	    chdir(get_repository.path);
+	    dfs_s(get_repository.path, "", 1);
+	    return;
+    }
+
+
     // make dir last commit path
     char name_dir_last_commit[maxn];
     sprintf(name_dir_last_commit, "%d/inf.txt", nu_last_commit);
@@ -1055,45 +1125,32 @@ void do_status(){
     strcat(inf_last_commit_path, "/.fp/commits/");
     strcat(inf_last_commit_path, name_dir_last_commit);
 
-    // make stage file path // be che dard mikhore?
-    //char stage_file_path[maxn];
-    //strcpy(stage_file_path, get_repository.path);
-    //strcat(stage_file_path, "/.fp/stage/stage.txt");
-
-    /*
-    // output nulls
-    chdir("stage");
-    FILE *stage_delete = fopen("stage_delete.txt", "r");
+    
+    // output D
     FILE *inf_last_commit = fopen(inf_last_commit_path, "r");
 
-
     // output nulls
-    chdir("../stage");
+    chdir("..");
+    chdir("stage");
     char in[max_path];
-    while(fgets(in, max_path, inf_last_commit) != NULL){
-        if(fopen(in, "r") == NULL){
-            int is_stage = 0;
-            in2[max_path];
-            while(fgest(in2, max_path, stage_delet) != NULL)
-                if(!Strcmp(in, in2))
-                    is_stage = 1;
-            fclose(stage_delet);
-            stage_delet = fopen("stage_delete.txt", "r");
 
-            if(is_stage){
-                printf("file path:%s\n+D\n", in);
-            }else{
-                printf("file path:%s\n+D\n", in);
-            }
-        }
-        fgets(in, max_path, inf_last_commit);
-    }*/
+    char in2[maxn];
+    while(fgets(in, max_path, inf_last_commit) != NULL){
+		strcpy(in2, in);
+		in2[strlen(in2)-1] = '\0';
+        	if(fopen(in2, "r") == NULL)
+            	printf("file path:%s-D\n", in);
+        	fgets(in, max_path, inf_last_commit);
+	   	fgets(in, max_path, inf_last_commit);
+    }
+
+    printf("before_dfs\n");
 
     chdir(get_repository.path);
-    dfs_s(get_repository.path, inf_last_commit_path);
+    dfs_s(get_repository.path, inf_last_commit_path, 0);
 }
 
-void dfs_s(char repository_path[], char inf_last_commit_path[]){
+void dfs_s(char repository_path[], char inf_last_commit_path[], int case_without_commit){
     DIR *dir = opendir(".");
 
     struct dirent* entry;
@@ -1106,13 +1163,16 @@ void dfs_s(char repository_path[], char inf_last_commit_path[]){
 
             // check stage
             printf("file path: %s\n", Tmp_path);
-            //int is_stage_file = 0;
-
             if(is_stage(Tmp_path, repository_path)){
                 printf("+");// is_stage_file = 1;
             }else{
                 printf("-");
             }
+
+		  if(case_without_commit){
+			  printf("A\n");
+			  continue;
+		  }
 
             // get last_change_date
             struct stat info;
@@ -1128,7 +1188,7 @@ void dfs_s(char repository_path[], char inf_last_commit_path[]){
         }
         if(strcmp(entry -> d_name, ".") && strcmp(entry -> d_name, "..") && strcmp(entry -> d_name, ".fp") && entry -> d_type == DT_DIR){
             chdir(entry -> d_name);
-            dfs_s(repository_path, inf_last_commit_path);
+            dfs_s(repository_path, inf_last_commit_path, case_without_commit);
         }
     }
     closedir(dir);
@@ -1136,22 +1196,32 @@ void dfs_s(char repository_path[], char inf_last_commit_path[]){
 }
 
 int do_check_with_last_commit(char file_path[], time_t the_last_change, char inf_last_commit_path[]){
-    FILE *inf = fopen(inf_last_commit_path, "r");
+	FILE *inf = fopen(inf_last_commit_path, "r");
 
-    char in[maxn];
-    while(fgets(in, maxn, inf) != NULL){
-        if(!Strcmp(file_path, in)){
-            fgets(in, maxn, inf);
-            if(difftime(to_time(in), the_last_change) != 0)
-                printf("M");
-            fclose(inf);
-            return 1;
+	char in[maxn];
 
-        }else{
-            fgets(in, maxn, inf);
-            fgets(in, maxn, inf);
-        }
-    }
-    fclose(inf);
-    return 0;
+     char fp_compare[max_path];
+     strcpy(fp_compare, file_path);
+     strcat(fp_compare, "\n");
+
+     while(fgets(in, maxn, inf) != NULL){
+		if(!strcmp(fp_compare, in)){
+            	fgets(in, maxn, inf);
+	//	   	printf("XXXDDD\n %s\n %s\n", in, ctime(&the_last_change));
+             	if(difftime(to_time(in), the_last_change) != 0){
+                 	printf("M");
+				fclose(inf);
+				return 1;
+			}else{
+				fclose(inf);
+				return 0;
+			}
+
+         }else{
+             fgets(in, maxn, inf);
+             fgets(in, maxn, inf);
+         }
+     }
+     fclose(inf);
+     return 0;
 }
