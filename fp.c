@@ -16,6 +16,17 @@
 char Cur_path[max_path];
 char Tmp_path[max_path];
 
+typedef struct global_config_data{
+	time_t name_date;
+	time_t email_date;
+	char name[maxn];
+	char email[maxn];
+
+} global_config_data;
+
+void do_config(int, char*[]);
+global_config_data take_global_config();
+
 int take_cur_path();
 int selected_paht();
 long long Number(char*);
@@ -23,6 +34,9 @@ long long Number(char*);
 typedef struct out_fr{
      char path[max_path];
      int er;
+	char name[maxn];
+	char email[maxn];
+
 } out_fr;
 
 void do_init(int, char*[]);
@@ -64,15 +78,22 @@ void show_branch();
 void do_checkout_HEAD();
 void do_checkout(int, char*[]);
 
-void do_rep_commit(char*, int, char*, int);
+void do_rep_commit(char*, char*, char*, int, char*, int);
 
 void do_show_tag_all();
 void do_tag(int, char*[]);
 void do_show_tag(int, char*[]);
 
+void do_revert_n(int, char*[]);
+void do_revert_go_back(int, char*[]);
+void do_revert_check_merge(int, char*[]);
+
 int main(int argc, char *argv[]){
 	if(argc < 2){
 		printf("error: invalid command!\n");   
+
+	}else if(!strcmp("config", argv[1])){
+		do_config(argc, argv);
 
 	}else if(!strcmp("init", argv[1])){
 		do_init(argc, argv);
@@ -134,6 +155,14 @@ int main(int argc, char *argv[]){
 		else
 			do_checkout(argc, argv);
 
+	}else if(!strcmp("revert", argv[1])){
+		if(argc > 2 && !strcmp("-n", argv[2]))
+			do_revert_n(argc, argv);
+		else if(*(argv[argc-1]) == 'H')
+			do_revert_go_back(argc, argv);
+		else 
+			do_revert_check_merge(argc, argv);
+	
 	}else if(!strcmp("tag", argv[1])){
 		if(argc == 2)
 			do_show_tag_all();
@@ -141,11 +170,12 @@ int main(int argc, char *argv[]){
 			do_show_tag(argc, argv);
 		else if(!strcmp(argv[2], "-a"))
 			do_tag(argc, argv);
+		else
+			printf("error: invalid command\n");
 
 	}else{
 		printf("error: invalid command\n");
 	}
-
 }
 
 
@@ -208,6 +238,78 @@ int return_selected_path(){
     return 1;
 }
 
+global_config_data take_global_config(){
+    chdir("/home/yasamin");
+    FILE *name_file = fopen("user_name.txt", "r");
+
+    global_config_data config;
+    fgets(config.name, maxn, name_file);
+    config.name[strlen(config.name)-1] = '\0';
+
+    char nd[maxn];
+    fgets(nd, maxn, name_file);
+    config.name_date = to_time(nd);
+
+    fclose(name_file);
+
+    FILE *email_file = fopen("user_email.txt", "r");
+
+    fgets(config.email, maxn, email_file);
+    config.email[strlen(config.email)-1] = '\0';
+
+    char ed[maxn];
+    fgets(ed, maxn, email_file);
+    config.email_date = to_time(ed);
+
+    fclose(email_file);
+
+    return config;
+}
+
+void do_config(int argc, char *argv[]){
+    if(!strcmp("-global", argv[2])){
+        chdir("/home/yasamin");
+
+	   FILE *update_file;
+        if(!strcmp("user.name", argv[3]))
+            update_file = fopen("user_name.txt", "w");
+        else
+            update_file = fopen("user_email.txt", "w");
+
+        fprintf(update_file, "%s\n", argv[4]);
+
+        time_t now; time(&now);
+        char cur_time[maxn];
+        strftime(cur_time, maxn, "%Y/%m/%d %H:%M:%S", localtime(&now));
+        fprintf(update_file, "%s\n", cur_time);
+
+        fclose(update_file);
+
+    }else{
+        take_cur_path();
+    	   out_fr get_repository = find_repository(Cur_path);
+    	   if (get_repository.path == NULL || get_repository.er){
+            printf("error: you do not have a repository!\n");
+            return;
+    	   }
+        chdir(get_repository.path), chdir(".fp");
+
+        FILE *update_file;
+    	   if(!strcmp("user.name", argv[2]))
+            update_file = fopen("user_name.txt", "w");
+        else
+            update_file = fopen("user_email.txt", "w");
+
+        fprintf(update_file, "%s\n", argv[3]);
+
+        time_t now; time(&now);
+        char cur_time[maxn];
+        strftime(cur_time, maxn, "%Y/%m/%d %H:%M:%S", localtime(&now));
+        fprintf(update_file, "%s\n", cur_time);
+
+        fclose(update_file);
+    }
+}
 
 out_fr find_repository(char *path){
 	take_cur_path();
@@ -266,6 +368,36 @@ out_fr find_repository(char *path){
           }
 	}
 
+
+	if(output.er != 1 && output.path != ""){
+		global_config_data config = take_global_config();
+		strcpy(output.name , config.name);
+		strcpy(output.email , config.email);
+
+		char in[maxn];
+
+		chdir(output.path), chdir(".fp");
+		FILE *name_file = fopen("user_name.txt", "r");
+		if(fgets(in, maxn, name_file) != NULL){
+			in[strlen(in)-1] = '\0';
+			char date[maxn];
+			fgets(date, maxn, name_file);
+			if(difftime(to_time(date), config.name_date) > 0)
+				strcpy(output.name , in);
+		}
+		fclose(name_file);
+
+          FILE *email_file = fopen("user_email.txt", "r");
+          if(fgets(in, maxn, email_file) != NULL){
+               in[strlen(in)-1] = '\0';
+               char date[maxn];
+               fgets(date, maxn, email_file);
+               if(difftime(to_time(date), config.email_date) > 0)
+                    strcpy(output.email , in);
+          }
+          fclose(email_file);
+
+	}
 	return_selected_path();
 	return output;
 }
@@ -847,10 +979,9 @@ void do_undo(char repository_path[]){
 	if(fgets(in, maxn, history_stage) == NULL)
 	    return;
 
-	fgets(in, maxn, history_stage);
-     fprintf(tmp_h, "%s", in);
-
+	printf("%s", in);
 	while(fgets(in, maxn, history_stage) != NULL){
+		printf("%s", in);
 	    in[strlen(in)-1] = '\0';
 	    do_remove_stage_file(in, repository_path);
 	}
@@ -1024,7 +1155,7 @@ void do_add_general_state(){
 	fclose(stage_file);
 }
 
-void update_informations_about_commits(char repository_path[], char massage[], char last_branch_name[], int cnt_commited_files, int commit_id){
+void update_informations_about_commits(char repository_path[], char user_name[], char user_email[], char massage[], char last_branch_name[], int cnt_commited_files, int commit_id){
 	chdir(repository_path);
      chdir(".fp"), chdir("commits");
 
@@ -1057,6 +1188,17 @@ void update_informations_about_commits(char repository_path[], char massage[], c
      update_commit = fopen("branch.txt", "a");
      fprintf(update_commit, "%s", last_branch_name);
      fclose(update_commit);
+
+	// user name
+	update_commit = fopen("author_name.txt", "a");
+     fprintf(update_commit, "%s\n", user_name);
+     fclose(update_commit);
+
+	// user email
+	update_commit = fopen("author_gmail.txt", "a");
+     fprintf(update_commit, "%s\n", user_email);
+     fclose(update_commit);
+
 
      // total commit files
      update_commit = fopen("total_commited_files.txt", "a");
@@ -1119,12 +1261,12 @@ void make_dir_commit(char repository_path[], int commit_id, char file_path1[], c
 
 void do_commit(char massage[]){
     // check repository
-	take_cur_path();
-    	out_fr get_repository = find_repository(Cur_path);
-    	if (get_repository.path == NULL || get_repository.er){
-     	printf("error: you do not have a repository!\n");
+    take_cur_path();
+    out_fr get_repository = find_repository(Cur_path);
+    if (get_repository.path == NULL || get_repository.er){
+    		printf("error: you do not have a repository!\n");
      	return;
-    	}
+    }
 
     // check massage
     if(strlen(massage) > 72)
@@ -1151,8 +1293,8 @@ void do_commit(char massage[]){
     if(fgets(in, maxn, tmp_file) == NULL){
 		printf("stage is empty!\n");
 		return;
-    	}
-     fclose(tmp_file);
+    }
+    fclose(tmp_file);
 
     chdir(get_repository.path);
     chdir(".fp");
@@ -1184,7 +1326,7 @@ void do_commit(char massage[]){
     }
 
     //printf("SSSSS\n");
-    update_informations_about_commits(get_repository.path, massage, last_branch_name, cnt_commited_files, cnt_commits+1);
+    update_informations_about_commits(get_repository.path, get_repository.name, get_repository.email,  massage, last_branch_name, cnt_commited_files, cnt_commits+1);
 //	printf("bad update\n");	
 
     // commit
@@ -1248,7 +1390,21 @@ void do_log_branch(char *branch_name){
 }
 
 void do_log_author(char *author_name){
+	if(!do_log_is_repository())
+         return;
+     FILE *author_commit = fopen("author_name.txt", "r");
 
+     int i = 1;
+     char in[maxn];
+     fgets(in, maxn, author_commit);
+     strcat(author_name, "\n");
+
+     while(!feof(author_commit)){
+         if(!strcmp(in, author_name))
+             do_log_show_commit(i);
+         fgets(in, maxn, author_commit);
+         i++;
+     }
 }
 
 time_t to_time(char *string_time){
@@ -1355,7 +1511,8 @@ void do_log_show_commit(int x){
     // open files
     FILE *date_commit = fopen("date.txt", "r");
     FILE *massage_commit = fopen("massage.txt", "r");
-    // author
+    FILE *author_name = fopen("author_name.txt", "r");
+    FILE *author_email = fopen("authoe_gmail.txt", "r");
     FILE *branch_commit = fopen("branch.txt", "r");
     FILE *cnt_file_commit = fopen("total_commited_files.txt", "r");
 
@@ -1365,6 +1522,8 @@ void do_log_show_commit(int x){
     while(i != x){
         fgets(in ,maxn, date_commit);
         fgets(in, maxn, massage_commit);
+	   fgets(in, maxn, author_name);
+	   fgets(in, maxn, author_email);
         fgets(in, maxn, branch_commit);
         fgets(in, maxn, cnt_file_commit);
         i++;
@@ -1376,8 +1535,13 @@ void do_log_show_commit(int x){
     printf("massage: %s", in);
     fgets(in, maxn, date_commit);
     printf("date: %s", in);
-        // author
-        // gmail
+    
+    fgets(in, maxn, author_name);
+    printf("author name: %s", in);
+
+    fgets(in, maxn, author_email);
+    printf("author email: %s", in);
+
     fgets(in, maxn, branch_commit);
     printf("branch: %s", in);
     fgets(in, maxn, cnt_file_commit);
@@ -1387,6 +1551,8 @@ void do_log_show_commit(int x){
     // close files
     fclose(massage_commit);
     fclose(date_commit);
+    fclose(author_name);
+    fclose(author_email);
     fclose(branch_commit);
     fclose(cnt_file_commit);
 }
@@ -1825,11 +1991,7 @@ void do_revert_n(int argc, char *argv[]){
         change_current_files(get_repository.path, nu_last_commit, 1);
 
     }else if(argc == 4){
-        char commit_id[maxn];
-        strcpy(commit_id, argv[3]+1);
-        commit_id[strlen(commit_id)-1] = '\0';
-
-        change_current_files(get_repository.path, Number(commit_id), 1);
+        change_current_files(get_repository.path, Number(argv[3]), 1);
 
     }else if(argc > 4)
         printf("error: invalid commit name\n");
@@ -1900,9 +2062,9 @@ void do_revert_go_back(int argc, char *argv[]){
     }
 
     if(is_massage)
-        do_rep_commit(get_repository.path, nu, massage, 1);
+        do_rep_commit(get_repository.path, get_repository.name, get_repository.email, nu, massage, 1);
     else
-        do_rep_commit(get_repository.path, nu, "", 0);
+        do_rep_commit(get_repository.path, get_repository.name, get_repository.email, nu, "", 0);
 
     change_current_files(get_repository.path, nu, 1);
 }
@@ -1962,9 +2124,9 @@ void do_revert_check_merge(int argc, char *argv[]){
     // check merge par
 
     if(is_massage)
-        do_rep_commit(get_repository.path, nu, massage, 1);
+        do_rep_commit(get_repository.path, get_repository.name, get_repository.email, nu, massage, 1);
     else
-        do_rep_commit(get_repository.path, nu, "", 0);
+        do_rep_commit(get_repository.path, get_repository.name, get_repository.email, nu, "", 0);
 
     change_current_files(get_repository.path, nu, 1);
 }
@@ -1974,15 +2136,20 @@ void show_tag(char tag_name[]){
     char in[maxn];
     int exist_tag = 0;
 
-    while(!fgets(in, maxn, tag_file)){
+    while(fgets(in, maxn, tag_file) != NULL){
+	   //printf("UUUUU");
         in[strlen(in)-1] = '\0';
         if(!strcmp(tag_name, in)){
-            printf("tag name: %s", in);
+            printf("tag name: %s\n", in);
 
             fgets(in, maxn, tag_file);
             printf("commid id: %s", in);
 
-            // author
+            fgets(in, maxn, tag_file);
+            printf("author name: %s", in);
+
+		  fgets(in, maxn, tag_file);
+            printf("author email: %s", in);
 
             fgets(in, maxn, tag_file);
             printf("date: %s", in);
@@ -1995,7 +2162,8 @@ void show_tag(char tag_name[]){
             break;
         }else{
             fgets(in, maxn, tag_file);
-            // author
+            fgets(in, maxn, tag_file);
+            fgets(in, maxn, tag_file);
             fgets(in, maxn, tag_file);
             fgets(in, maxn, tag_file);
         }
@@ -2015,14 +2183,17 @@ void do_show_tag(int argc, char *argv[]){
           return;
     }
 
+
     // make tag name
     char tag_name[maxn];
     strcpy(tag_name, argv[3]);
     for(int i = 4;i < argc;i++)
         strcat(tag_name, " "), strcat(tag_name, argv[i]);
+
     //tag_name[strlen(tag_name)-1] = '\0';
 
     //
+
     chdir(get_repository.path);
     chdir(".fp");
     chdir("tag");
@@ -2058,25 +2229,29 @@ void do_show_tag_all(){
     chdir(".fp");
     chdir("tag");
 
+    //printf("HERE\n");// mark_tag
+    int *remove = (int*) calloc(maxn , sizeof(int));
     while(1){
         FILE *tag_file = fopen("tag.txt", "r");
-        int *remove = (int*) calloc(maxn , sizeof(int));
 
         int i = 0, is = -1;
         char tag_name[maxn];
-        char in[maxn], in2[maxn];
+        char in[maxn];
 
-        while(fgets(in, maxn, tag_file) == NULL){
-            strcpy(in2, in), in2[strlen(in2)-1] = '\0';
+        while(fgets(in, maxn, tag_file) != NULL){
+            in[strlen(in)-1] = '\0';
             if(*(remove + i) == 0){
-                if(is != -1 && !compare_word(tag_name, in2))
+                if(is != -1 && !compare_word(tag_name, in))
                     *(remove + is) = 0;
-                if(is == -1 || !compare_word(tag_name, in2))
-                    is = i, *(remove+i) = 1, strcpy(tag_name, in2);
+                if(is == -1 || !compare_word(tag_name, in))
+                    is = i, *(remove + i) = 1, strcpy(tag_name, in);
             }
+
+	//	  printf("i=%d tag-name=%s\n", i, tag_name);
             i++;
             fgets(in, maxn, tag_file);
-            // author
+            fgets(in, maxn, tag_file);
+		  fgets(in, maxn, tag_file);
             fgets(in, maxn, tag_file);
             fgets(in, maxn, tag_file);
         }
@@ -2101,51 +2276,41 @@ void do_tag(int argc, char *argv[]){
     chdir(get_repository.path);
     chdir(".fp");
 
-    int j;
+    //printf("HERE\n"); // mark do tag
+    int j = 4;
 
     // make tag name
     char tag_name[maxn];
     strcpy(tag_name, argv[3]);
-    for(int i = 4;i < argc;i++){
-        //strcat(tag_name, " "), strcat(tag_name, argv[i]);
-        if(*(argv[i]) == '-'){
-            j = i;
-            break;
-        }
-	   strcat(tag_name, " "), strcat(tag_name, argv[i]);
+
+    while(j < argc && strcmp(argv[j], "-m") && strcmp(argv[j], "-c") && strcmp(argv[j], "-f")){
+	   strcat(tag_name, " "), strcat(tag_name, argv[j]);
+	   //printf("j = %d * argv = %s * tag_name = %s\n", j, argv[j], tag_name);
+        j++;
     }
+    //printf("j = %d * argv = %s * tag_name = %s\n", j, argv[j], tag_name);
 
-    //tag_name[strlen(tag_name)-1] = '\0';
 
-    j--;
     // make massage
     char tag_massage[maxn];
     strcpy(tag_massage, "");
-    if(j+1 < argc && !strcmp("-m", argv[j+1])){
-        strcat(tag_massage, argv[j+2] + 1);
-        for(int i = j+3;i < argc;i++){
-            //strcat(tag_massage, " "), strcat(tag_massage, argv[i]);
-            if(*(argv[i]) == '-'){
-                j = i;
-                break;
-            }
-		  strcat(tag_massage, " "), strcat(tag_massage, argv[i]);
-        }
+    if(j < argc && !strcmp("-m", argv[j])){
+        strcat(tag_massage, argv[j+1]);
+        j += 2; 
+	   while(j < argc && strcmp(argv[j], "-c") && strcmp(argv[j], "-f")){
+        	   strcat(tag_massage, " "), strcat(tag_massage, argv[j]);
+        	   j++;
+    	   }
     }
-    //tag_massage[strlen(tag_massage)-1] = '\0';
 
-    j--;
     // make commit id
     FILE *last_commit_file = fopen("last_commit_id.txt", "r");
     int commit_id;
     fscanf(last_commit_file, "%d", &commit_id);
     fclose(last_commit_file);
-    if(j+1 < argc && !strcmp("-c", argv[j+1])){
-        char tmp[maxn];
-        strcpy(tmp, argv[j+2]);
-        //tmp[strlen(tmp)-1] = '\0';
-        commit_id = Number(tmp);
-    }
+
+    if(j < argc && !strcmp("-c", argv[j]))
+        commit_id = Number(argv[j+1]);
 
 
     chdir("tag");
@@ -2163,17 +2328,22 @@ void do_tag(int argc, char *argv[]){
         }
 
         fgets(in, maxn, tag_file);
-        // author
+        
+	   fgets(in, maxn, tag_file);
+	   fgets(in, maxn, tag_file);
+
         fgets(in, maxn, tag_file);
         fgets(in, maxn, tag_file);
     }
     fclose(tag_file);
 
     if(exist_tag && strcmp(argv[argc-1], "-f")){
-        printf("error: you already have a tag with name %s! use -f to over write it!", tag_name);
+        printf("error: you already have a tag with name %s! use -f to overwrite it!", tag_name);
         return;
     }else{
+	   tag_file = fopen("tag.txt", "r");
         FILE *tmp_tag_file = fopen("tmp_tag.txt", "w");
+
         while(fgets(in, maxn, tag_file) != NULL){
             in[strlen(in)-1] = '\0';
             if(strcmp(tag_name, in)){
@@ -2182,7 +2352,11 @@ void do_tag(int argc, char *argv[]){
                 fgets(in, maxn, tag_file);
                 fprintf(tmp_tag_file, "%s", in);
 
-                // author
+                fgets(in, maxn, tag_file);
+                fprintf(tmp_tag_file, "%s", in);
+
+			 fgets(in, maxn, tag_file);
+                fprintf(tmp_tag_file, "%s", in);
 
                 fgets(in, maxn, tag_file);
                 fprintf(tmp_tag_file, "%s", in);
@@ -2199,19 +2373,25 @@ void do_tag(int argc, char *argv[]){
         }
 
 
+//	   printf("%s\n%s\n", tag_name, tag_massage);
         fprintf(tmp_tag_file, "%s\n", tag_name);
         fprintf(tmp_tag_file, "%d\n", commit_id);
-        // author
+        fprintf(tmp_tag_file, "%s\n", get_repository.name);
+	   fprintf(tmp_tag_file, "%s\n", get_repository.email);
         time_t now; time(&now);
-        fprintf(tmp_tag_file, "%s\n", ctime(&now));
+        fprintf(tmp_tag_file, "%s", ctime(&now));
         fprintf(tmp_tag_file, "%s\n", tag_massage);
-    }
 
-    remove("tag.txt");
-    rename("tmp_tag.txt", "tag.txt");
+	   fclose(tag_file);
+	   fclose(tmp_tag_file);
+
+	   remove("tag.txt");
+	   rename("tmp_tag.txt", "tag.txt");
+
+    }
 }
 
-void do_rep_commit(char repository_path[], int nu, char massage[], int is_massage){
+void do_rep_commit(char repository_path[], char user_name[], char user_email[], int nu, char massage[], int is_massage){
     take_cur_path();
     
     chdir(repository_path);
@@ -2246,9 +2426,9 @@ void do_rep_commit(char repository_path[], int nu, char massage[], int is_massag
     fclose(cnt_commits);
 
     if(is_massage)
-        update_informations_about_commits(repository_path, massage, lbn, tcf, cntc+1);
+        update_informations_about_commits(repository_path, user_name, user_email, massage, lbn, tcf, cntc+1);
     else
-        update_informations_about_commits(repository_path, massage_c, lbn, tcf, cntc+1);
+        update_informations_about_commits(repository_path, user_name, user_email, massage_c, lbn, tcf, cntc+1);
     
     char file_path1[maxn];
     strcpy(file_path1, repository_path);
